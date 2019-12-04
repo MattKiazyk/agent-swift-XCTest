@@ -14,80 +14,59 @@ enum ReportingServiceError: Error {
 }
 
 class ReportingService {
-  
+    
   private let httpClient: HTTPClient
   private let configuration: AgentConfiguration
-  
+  private var fileService: FileService?
+    
   private var launchID: String?
   private var testSuiteStatus = TestStatus.passed
   private var launchStatus = TestStatus.passed
   private var rootSuiteID: String?
   private var testSuiteID: String?
   private var testID = ""
-  
-  private let semaphore = DispatchSemaphore(value: 0)
-  private let timeOutForRequestExpectation = 10.0
-  
+    
   init(configuration: AgentConfiguration) {
     self.configuration = configuration
     let baseURL = configuration.reportPortalURL.appendingPathComponent(configuration.projectName)
     httpClient = HTTPClient(baseURL: baseURL)
     httpClient.setPlugins([AuthorizationPlugin(token: configuration.portalToken)])
+    self.fileService = FileService(logsDirectory: configuration.logDirectory)
   }
-  
-  private func getStoredLaunchID(completion: @escaping (String?) -> Void) throws {
-    let endPoint = GetCurrentLaunchEndPoint()
-    try httpClient.callEndPoint(endPoint) { (result: LaunchListInfo) in
-      guard let launch = result.content.first, let status = launch.status, status == "IN_PROGRESS" else {
-        completion(nil)
-        return
-      }
-      
-      completion(launch.id)
-    }
-  }
-  
-  func startLaunch() throws {
-    try getStoredLaunchID { (savedLaunchID: String?) in
-      guard let savedLaunchID = savedLaunchID else {
-        let endPoint = StartLaunchEndPoint(
-          launchName: self.configuration.launchName,
-          tags: self.configuration.tags,
-          mode: self.configuration.launchMode
-        )
-        
-        do {
-          try self.httpClient.callEndPoint(endPoint) { (result: Launch) in
-            self.launchID = result.id
-            self.semaphore.signal()
-          }
-        } catch let error {
-          print(error)
-        }
-        
-        return
-      }
-      
-      self.launchID = savedLaunchID
-      self.semaphore.signal()
-    }
     
-    _ = semaphore.wait(timeout: .now() + timeOutForRequestExpectation)
+  func startLaunch() throws {
+    
+    let endPoint = StartLaunchEndPoint(
+      launchName: getLaunchName(),
+      tags: self.configuration.tags,
+      mode: self.configuration.launchMode
+    )
+    
+    let response: Result<Launch, Error> = self.httpClient.synchronousCallEndPoint(endPoint)
+    switch response {
+    case .success(let result):
+      self.launchID = result.id
+    case .failure(let error):
+      print(error)
+    }
   }
-  
+   
   func startRootSuite(_ suite: XCTestSuite) throws {
     guard let launchID = launchID else {
       throw ReportingServiceError.launchIdNotFound
     }
     
     let endPoint = StartItemEndPoint(itemName: suite.name, launchID: launchID, type: .suite)
-    try httpClient.callEndPoint(endPoint) { (result: Item) in
-      self.rootSuiteID = result.id
-      self.semaphore.signal()
-    }
-    _ = semaphore.wait(timeout: .now() + timeOutForRequestExpectation)
+   
+    let response: Result<Item, Error> = self.httpClient.synchronousCallEndPoint(endPoint)
+    switch response {
+     case .success(let result):
+       self.rootSuiteID = result.id
+     case .failure(let error):
+       print(error)
+     }
   }
-  
+    
   func startTestSuite(_ suite: XCTestSuite) throws {
     guard let launchID = launchID else {
       throw ReportingServiceError.launchIdNotFound
@@ -97,13 +76,15 @@ class ReportingService {
     }
     
     let endPoint = StartItemEndPoint(itemName: suite.name, parentID: rootSuiteID, launchID: launchID, type: .test)
-    try httpClient.callEndPoint(endPoint) { (result: Item) in
-      self.testSuiteID = result.id
-      self.semaphore.signal()
+    let response: Result<Item, Error> = self.httpClient.synchronousCallEndPoint(endPoint)
+    switch response {
+     case .success(let result):
+       self.testSuiteID = result.id
+     case .failure(let error):
+       print(error)
     }
-    _ = semaphore.wait(timeout: .now() + timeOutForRequestExpectation)
   }
-  
+    
   func startTest(_ test: XCTestCase) throws {
     guard let launchID = launchID else {
       throw ReportingServiceError.launchIdNotFound
@@ -118,21 +99,23 @@ class ReportingService {
       type: .step
     )
     
-    try httpClient.callEndPoint(endPoint) { (result: Item) in
-      self.testID = result.id
-      self.semaphore.signal()
-    }
-    _ = semaphore.wait(timeout: .now() + timeOutForRequestExpectation)
+    let response: Result<Item, Error> = self.httpClient.synchronousCallEndPoint(endPoint)
+    switch response {
+      case .success(let result):
+        self.testID = result.id
+      case .failure(let error):
+        print(error)
+     }
+    
+     self.fileService!.createLogFile(withName: extractTestName(from: test))
+   }
+    
+  func reportLog(level: String, message: String) throws {
+    let endPoint = PostLogEndPoint(itemID: testID, level: level, message: message)
+    
+    let _: Result<Item, Error> = self.httpClient.synchronousCallEndPoint(endPoint)
   }
-  
-  func reportError(message: String) throws {
-    let endPoint = PostLogEndPoint(itemID: testID, level: "error", message: message)
-    try httpClient.callEndPoint(endPoint) { (result: Item) in
-      self.semaphore.signal()
-    }
-    _ = semaphore.wait(timeout: .now() + timeOutForRequestExpectation)
-  }
-  
+    
   func finishTest(_ test: XCTestCase) throws {
     let testStatus = test.testRun!.hasSucceeded ? TestStatus.passed : TestStatus.failed
     if testStatus == .failed {
@@ -140,36 +123,32 @@ class ReportingService {
       launchStatus = .failed
     }
     
+    try? reportLog(level: "info", message: fileService!.readLogFile(fileName: extractTestName(from: test)))
+    fileService!.deleteLogFile(withName: extractTestName(from: test))
+    
     let endPoint = FinishItemEndPoint(itemID: testID, status: testStatus)
     
-    try httpClient.callEndPoint(endPoint) { (result: Finish) in
-      self.semaphore.signal()
-    }
-    _ = semaphore.wait(timeout: .now() + timeOutForRequestExpectation)
+    let _: Result<Finish, Error> = self.httpClient.synchronousCallEndPoint(endPoint)
   }
-  
+    
   func finishTestSuite() throws {
     guard let testSuiteID = testSuiteID else {
       throw ReportingServiceError.testSuiteIdNotFound
     }
     let endPoint = FinishItemEndPoint(itemID: testSuiteID, status: testSuiteStatus)
-    try httpClient.callEndPoint(endPoint) { (result: Finish) in
-      self.semaphore.signal()
-    }
-    _ = semaphore.wait(timeout: .now() + timeOutForRequestExpectation)
+    
+    let _: Result<Finish, Error> = self.httpClient.synchronousCallEndPoint(endPoint)
   }
-  
+    
   func finishRootSuite() throws {
     guard let rootSuiteID = rootSuiteID else {
       throw ReportingServiceError.testSuiteIdNotFound
     }
     let endPoint = FinishItemEndPoint(itemID: rootSuiteID, status: launchStatus)
-    try httpClient.callEndPoint(endPoint) { (result: Finish) in
-      self.semaphore.signal()
-    }
-    _ = semaphore.wait(timeout: .now() + timeOutForRequestExpectation)
+   
+    let _: Result<Finish, Error> = self.httpClient.synchronousCallEndPoint(endPoint)
   }
-  
+    
   func finishLaunch() throws {
     guard configuration.shouldFinishLaunch else {
       print("skip finish till next test bundle")
@@ -179,42 +158,25 @@ class ReportingService {
       throw ReportingServiceError.launchIdNotFound
     }
     let endPoint = FinishLaunchEndPoint(launchID: launchID, status: launchStatus)
-    try httpClient.callEndPoint(endPoint) { (result: Finish) in
-      self.semaphore.signal()
-    }
-    _ = semaphore.wait(timeout: .now() + timeOutForRequestExpectation)
+    
+    let _: Result<Finish, Error> = self.httpClient.synchronousCallEndPoint(endPoint)
   }
-  
+    
+  func getLaunchName() -> String {
+    return "iOS_" + configuration.launchName + "_" + configuration.testType + "_" + configuration.environment + "_" + configuration.buildVersion
+  }
 }
 
 private extension ReportingService {
-  
+    
   func extractTestName(from test: XCTestCase) -> String {
     let originName = test.name.trimmingCharacters(in: .whitespacesAndNewlines)
     let components = originName.components(separatedBy: " ")
-    var result = components[1].replacingOccurrences(of: "]", with: "")
-    
-    if configuration.testNameRules.contains(.stripTestPrefix) {
-      result.removeFirst(4)
-    }
-    if configuration.testNameRules.contains(.whiteSpaceOnUnderscore) {
-      result = result.replacingOccurrences(of: "_", with: " ")
-    }
-    if configuration.testNameRules.contains(.whiteSpaceOnCamelCase) {
-      var insertOffset = 0
-      for index in 1..<result.count {
-        let currentIndex = result.index(result.startIndex, offsetBy: index + insertOffset)
-        let previousIndex = result.index(result.startIndex, offsetBy: index - 1 + insertOffset)
-        if String(result[previousIndex]).isLowercased && !String(result[currentIndex]).isLowercased {
-          result.insert(" ", at: currentIndex)
-          insertOffset += 1
-        }
-      }
-    }
-    
+    let result = components[1].replacingOccurrences(of: "]", with: "")
+
     return result
   }
-  
+    
 }
 
 extension String {

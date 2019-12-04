@@ -16,7 +16,10 @@ class HTTPClient {
   
   private let baseURL: URL
   private let requestTimeout: TimeInterval = 120
+  private let timeOutForRequestExpectation = 15.0
   private let utilityQueue = DispatchQueue(label: "com.report_portal_agent.httpclient", qos: .utility)
+  private let semaphore = DispatchSemaphore(value: 0)
+  
   private var plugins: [HTTPClientPlugin] = []
   
   init(baseURL: URL) {
@@ -87,8 +90,32 @@ class HTTPClient {
       task.resume()
     }
   }
+    
+  func synchronousCallEndPoint<T: Decodable>(_ endPoint: EndPoint) -> Result<T, Error> {
+    do {
+      var resultObject: T?
+      try callEndPoint(endPoint) { [weak self] (result: T) in
+        resultObject = result
+        self?.semaphore.signal()
+      }
+      _ = semaphore.wait(timeout: .now() + timeOutForRequestExpectation)
+        
+      guard let result = resultObject else {
+        let err = SomeError.error
+        return .failure(err)
+      }
+      return .success(result)
+    } catch let error {
+      return .failure(error)
+    }
+  }
+}
+
+enum SomeError: Error {
+  case error
 }
 
 protocol HTTPClientPlugin {
   func processRequest(_ originRequest: inout URLRequest)
 }
+

@@ -10,14 +10,13 @@ import Foundation
 import XCTest
 
 public class RPListener: NSObject, XCTestObservation {
-  
+    
   private var reportingService: ReportingService!
   private let queue = DispatchQueue(label: "com.report_portal.reporting", qos: .utility)
-  
+    
   public override init() {
     super.init()
-    
-    
+     
     XCTestObservationCenter.shared.addTestObserver(self)
   }
   
@@ -31,7 +30,10 @@ public class RPListener: NSObject, XCTestObservation {
       let projectName = bundleProperties["ReportPortalProjectName"] as? String,
       let token = bundleProperties["ReportPortalToken"] as? String,
       let shouldFinishLaunch = bundleProperties["IsFinalTestBundle"] as? Bool,
-      let launchName = bundleProperties["ReportPortalLaunchName"] as? String else
+      let launchName = bundleProperties["ReportPortalLaunchName"] as? String,
+      let logDirectory = bundleProperties["REMOTE_LOGGING_BASE_URL"] as? String,
+      let environment = bundleProperties["ENVIRONMENT_NAME"] as? String,
+      let buildVersion = bundleProperties["CFBundleShortVersionString"] as? String else
     {
       fatalError("Configure properties for report portal in the Info.plist")
     }
@@ -39,24 +41,14 @@ public class RPListener: NSObject, XCTestObservation {
     if let tagString = bundleProperties["ReportPortalTags"] as? String {
       tags = tagString.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).components(separatedBy: ",")
     }
+    tags.append(testType.rawValue)
+    tags.append(launchName)
+        
     var launchMode: LaunchMode = .default
     if let isDebug = bundleProperties["IsDebugLaunchMode"] as? Bool, isDebug == true {
       launchMode = .debug
     }
-
-    var testNameRules: NameRules = []
-    if let rules = bundleProperties["TestNameRules"] as? [String: Bool] {
-      if rules["StripTestPrefix"] == true {
-        testNameRules.update(with: .stripTestPrefix)
-      }
-      if rules["WhiteSpaceOnUnderscore"] == true {
-        testNameRules.update(with: .whiteSpaceOnUnderscore)
-      }
-      if rules["WhiteSpaceOnCamelCase"] == true {
-        testNameRules.update(with: .whiteSpaceOnCamelCase)
-      }
-    }
-    
+        
     return AgentConfiguration(
       reportPortalURL: portalURL,
       projectName: projectName,
@@ -66,10 +58,13 @@ public class RPListener: NSObject, XCTestObservation {
       tags: tags,
       shouldFinishLaunch: shouldFinishLaunch,
       launchMode: launchMode,
-      testNameRules: testNameRules
-    )
+      logDirectory: logDirectory,
+      environment: environment,
+      buildVersion: buildVersion,
+      testType: testType.rawValue
+      )
   }
-  
+    
   public func testBundleWillStart(_ testBundle: Bundle) {
     let configuration = readConfiguration(from: testBundle)
     
@@ -86,7 +81,7 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
-  
+    
   public func testSuiteWillStart(_ testSuite: XCTestSuite) {
     guard
       !testSuite.name.contains("All tests"),
@@ -107,11 +102,7 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
-  
-  public func testSuite(_ testSuite: XCTestSuite, didFailWithDescription description: String, inFile filePath: String?, atLine lineNumber: Int) {
     
-  }
-  
   public func testCaseWillStart(_ testCase: XCTestCase) {
     queue.async {
       do {
@@ -121,17 +112,17 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
-  
+    
   public func testCase(_ testCase: XCTestCase, didFailWithDescription description: String, inFile filePath: String?, atLine lineNumber: Int) {
     queue.async {
       do {
-        try self.reportingService.reportError(message: "Test '\(String(describing: testCase.name)))' failed on line \(lineNumber), \(description)")
+        try self.reportingService.reportLog(level: "error", message: "Test '\(String(describing: testCase.name)))' failed on line \(lineNumber), \(description)")
       } catch let error {
         print(error)
       }
     }
   }
-  
+    
   public func testCaseDidFinish(_ testCase: XCTestCase) {
     queue.async {
       do {
@@ -141,7 +132,7 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
-  
+    
   public func testSuiteDidFinish(_ testSuite: XCTestSuite) {
     guard
       !testSuite.name.contains("All tests"),
@@ -162,7 +153,7 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
-  
+    
   public func testBundleDidFinish(_ testBundle: Bundle) {
     queue.sync() {
       do {
@@ -172,4 +163,18 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
+    
+  // MARK: - Environment
+    
+  enum TestType: String {
+    case e2eTest
+    case uiTest
+  }
+    
+  private(set) lazy var testType: TestType = {
+    let type = ProcessInfo.processInfo.environment["TestType"] ?? ""
+    let other = TestType(rawValue: type) ?? .uiTest
+    
+    return other
+  }()
 }
