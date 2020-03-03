@@ -10,17 +10,18 @@ import Foundation
 import XCTest
 
 public class RPListener: NSObject, XCTestObservation {
-    
+
   private var reportingService: ReportingService!
   private let queue = DispatchQueue(label: "com.report_portal.reporting", qos: .utility)
   private var configuration: AgentConfiguration!
-    
+  private var shouldPublishData = false
+
   public override init() {
     super.init()
-     
+
     XCTestObservationCenter.shared.addTestObserver(self)
   }
-  
+
   private func readConfiguration(from testBundle: Bundle) -> AgentConfiguration {
     guard
       let bundlePath = testBundle.path(forResource: "Info", ofType: "plist"),
@@ -46,12 +47,12 @@ public class RPListener: NSObject, XCTestObservation {
     tags.append(launchName)
     tags.append(buildVersion)
     tags.append(testPriority.rawValue)
-        
+
     var launchMode: LaunchMode = .default
     if let isDebug = bundleProperties["IsDebugLaunchMode"] as? Bool, isDebug == true {
       launchMode = .debug
     }
-        
+
     return AgentConfiguration(
       reportPortalURL: portalURL,
       projectName: projectName,
@@ -66,13 +67,18 @@ public class RPListener: NSObject, XCTestObservation {
       buildVersion: buildVersion,
       testType: testType.rawValue,
       testPriority: testPriority.rawValue
-      )
+    )
   }
-    
+
   public func testBundleWillStart(_ testBundle: Bundle) {
     self.configuration = readConfiguration(from: testBundle)
-    
-    guard configuration.shouldSendReport else {
+
+    //Determine whether to send data to the Report Portal. Data can be sent if tests are run
+    //from CircleCI or the PushTestDataToReportPortal parameter is set to YES
+    let circleCIRun = (ProcessInfo.processInfo.environment["CIRCLECI"] ?? "false") == "true"
+    shouldPublishData = circleCIRun || configuration.shouldSendReport
+
+    guard shouldPublishData else {
       print("Set 'YES' for 'PushTestDataToReportPortal' property in Info.plist if you want to put data to report portal")
       return
     }
@@ -85,14 +91,14 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
-    
+
   public func testSuiteWillStart(_ testSuite: XCTestSuite) {
-    if self.configuration.shouldSendReport {
+    if shouldPublishData {
       queue.async {
         do {
           if testSuite.name.contains(".xctest") {
             try self.reportingService.startRootSuite(testSuite)
-          } else if !testSuite.name.contains("Selected tests") {
+          } else {
             try self.reportingService.startTestSuite(testSuite)
           }
         } catch let error {
@@ -101,9 +107,9 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
-    
+
   public func testCaseWillStart(_ testCase: XCTestCase) {
-    if self.configuration.shouldSendReport {
+    if shouldPublishData {
       queue.async {
         do {
           try self.reportingService.startTest(testCase)
@@ -113,9 +119,9 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
-    
+
   public func testCase(_ testCase: XCTestCase, didFailWithDescription description: String, inFile filePath: String?, atLine lineNumber: Int) {
-    if self.configuration.shouldSendReport {
+    if shouldPublishData {
       queue.async {
         do {
           try self.reportingService.reportLog(level: "error", message: "Test '\(String(describing: testCase.name)))' failed on line \(lineNumber), \(description)")
@@ -125,9 +131,9 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
-    
+
   public func testCaseDidFinish(_ testCase: XCTestCase) {
-    if self.configuration.shouldSendReport {
+    if shouldPublishData {
       queue.async {
         do {
           try self.reportingService.finishTest(testCase)
@@ -137,14 +143,14 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
-    
+
   public func testSuiteDidFinish(_ testSuite: XCTestSuite) {
-    if self.configuration.shouldSendReport {
+    if shouldPublishData {
       queue.async {
         do {
           if testSuite.name.contains(".xctest") {
             try self.reportingService.finishRootSuite()
-          } else {
+          } else if !testSuite.name.contains("Selected tests") {
             try self.reportingService.finishTestSuite()
           }
         } catch let error {
@@ -153,39 +159,39 @@ public class RPListener: NSObject, XCTestObservation {
       }
     }
   }
-    
+
   public func testBundleDidFinish(_ testBundle: Bundle) {
-    if self.configuration.shouldSendReport {
+    if shouldPublishData {
       queue.sync() {
         do {
           try self.reportingService.finishLaunch()
         } catch let error {
-         print(error)
+          print(error)
         }
       }
     }
   }
-    
+
   // MARK: - Environment
-    
+
   enum TestType: String {
     case e2eTest
     case uiTest
   }
-    
+
   enum TestPriority: String {
     case smoke
     case mat
     case regression
   }
-    
+
   private(set) lazy var testType: TestType = {
     let type = ProcessInfo.processInfo.environment["TestType"] ?? ""
     let other = TestType(rawValue: type) ?? .uiTest
-    
+
     return other
   }()
-    
+
   private(set) lazy var testPriority: TestPriority = {
     let priority = ProcessInfo.processInfo.environment["TestPriority"] ?? ""
 
