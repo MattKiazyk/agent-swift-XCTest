@@ -14,19 +14,25 @@ struct StartItemEndPoint: EndPoint {
   var relativePath: String
   let parameters: [String : Any]
   
-  init(itemName: String, parentID: String? = nil, launchID: String, type: TestType) {
+  init(itemName: String, parentID: String? = nil, launchID: String, type: TestType, tags: [[String: Any]] = []) {
     relativePath = "item"
     if let parentID = parentID {
       relativePath += "/\(parentID)"
     }
     
     parameters = [
-      "description": "",
-      "launch_id": launchID,
-      "name": itemName,
-      "start_time": TimeHelper.currentTimeAsString(),
-      "tags": [],
-      "type": type.rawValue
+     "attributes": tags,
+     "codeRef": "",
+     "description": "",
+     "launchUuid": launchID,
+     "name": itemName,
+     "parameters": [],
+     "retry": false,
+     "startTime": TimeHelper.currentTimeAsString(),
+     "testCaseHash": "",
+     "testCaseId": "",
+     "type": type.rawValue,
+     "uniqueId": ""
     ]
   }
   

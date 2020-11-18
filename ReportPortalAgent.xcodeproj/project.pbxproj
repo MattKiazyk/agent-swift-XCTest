@@ -39,7 +39,7 @@
 		92FEE094212EEE2D00ADB1ED /* FinishItemEndPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92FEE093212EEE2D00ADB1ED /* FinishItemEndPoint.swift */; };
 		92FEE096212EF30700ADB1ED /* StartItemEndPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92FEE095212EF30700ADB1ED /* StartItemEndPoint.swift */; };
 		92FEE098212F028B00ADB1ED /* PostLogEndPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92FEE097212F028B00ADB1ED /* PostLogEndPoint.swift */; };
-		DE4CC4E02405480700B5BC1A /* FinishLaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE4CC4DF2405480700B5BC1A /* FinishLaunch.swift */; };
+		DE7E64BB23D702A70056D154 /* FinishLaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7E64BA23D702A70056D154 /* FinishLaunch.swift */; };
 		DEE32BA6238E6B4E0030CA36 /* FileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE32BA5238E6B4E0030CA36 /* FileService.swift */; };
 /* End PBXBuildFile section */
 
@@ -116,7 +116,7 @@
 		92FEE095212EF30700ADB1ED /* StartItemEndPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartItemEndPoint.swift; sourceTree = "<group>"; };
 		92FEE097212F028B00ADB1ED /* PostLogEndPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostLogEndPoint.swift; sourceTree = "<group>"; };
 		B298DF4C300965F413082F68 /* Pods_RPAgentSwiftXCTest.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RPAgentSwiftXCTest.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		DE4CC4DF2405480700B5BC1A /* FinishLaunch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinishLaunch.swift; sourceTree = "<group>"; };
+		DE7E64BA23D702A70056D154 /* FinishLaunch.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FinishLaunch.swift; sourceTree = "<group>"; };
 		DEE32BA5238E6B4E0030CA36 /* FileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -243,7 +243,7 @@
 				92FEE07B212ECB0800ADB1ED /* AgentConfiguration.swift */,
 				9203A3C4213730D400BFAF82 /* NameRules.swift */,
 				92FEE06F212E943400ADB1ED /* FinishItem.swift */,
-				DE4CC4DF2405480700B5BC1A /* FinishLaunch.swift */,
+				DE7E64BA23D702A70056D154 /* FinishLaunch.swift */,
 			);
 			path = Entities;
 			sourceTree = "<group>";
@@ -470,7 +470,7 @@
 				92FEE070212E943400ADB1ED /* FinishItem.swift in Sources */,
 				92FEE098212F028B00ADB1ED /* PostLogEndPoint.swift in Sources */,
 				92FEE08A212ECB7900ADB1ED /* AuthorizationPlugin.swift in Sources */,
-				DE4CC4E02405480700B5BC1A /* FinishLaunch.swift in Sources */,
+				DE7E64BB23D702A70056D154 /* FinishLaunch.swift in Sources */,
 				92FEE086212ECB7900ADB1ED /* HTTPClient.swift in Sources */,
 				92FEE06C212E925D00ADB1ED /* Item.swift in Sources */,
 				9203A3872135882F00BFAF82 /* GetCurrentLaunchEndPoint.swift in Sources */,

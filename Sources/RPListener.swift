@@ -43,18 +43,14 @@ public class RPListener: NSObject, XCTestObservation {
 
     //Determine user name/machine name which inits test run. Initially, the data looks like /Users/epamcontractor/Library/Developer/...
     //We need to extract the second value, i.e. epamcontractor for example.
-    let currentServerName = String(ProcessInfo.processInfo.arguments[0].split(separator: "/")[1])
-
-    var tags: [String] = []
-    if let tagString = bundleProperties["ReportPortalTags"] as? String {
-      tags = tagString.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).components(separatedBy: ",")
-    }
-    tags.append(testType.rawValue)
-    tags.append(launchName)
-    tags.append(buildVersion)
-    tags.append(testPriority.rawValue)
-    tags.append(currentServerName)
-
+    let currentServerName = String(ProcessInfo.processInfo.arguments[0].split(separator: "/")[1])   
+    var tags : [[String: Any]] = TagHelper.defaultTags
+    tags.append(["key": "environment", "system": false, "value": environment])
+    tags.append(["key": "testType", "system": false, "value": testType.rawValue])
+    tags.append(["key": "product", "system": false, "value": launchName])
+    tags.append(["key": "buildVersion", "system": false, "value": buildVersion])
+    tags.append(["key": "testPriority", "system": false, "value": testPriority.rawValue])
+    tags.append(["key": "serverName", "system": false, "value": currentServerName])
     var launchMode: LaunchMode = .default
     if let isDebug = bundleProperties["IsDebugLaunchMode"] as? Bool, isDebug == true {
       launchMode = .debug
@@ -79,7 +75,7 @@ public class RPListener: NSObject, XCTestObservation {
       buildVersion: buildVersion,
       testType: testType.rawValue,
       testPriority: testPriority.rawValue,
-      testRunServerName: testRunServerName
+      testRunServerName: currentServerName
     )
   }
 
@@ -174,7 +170,7 @@ public class RPListener: NSObject, XCTestObservation {
         do {
           try self.reportingService.finishLaunch()
         } catch let error {
-          print(error)
+         print(error)
         }
       }
     }

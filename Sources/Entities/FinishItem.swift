@@ -9,7 +9,7 @@
 import Foundation
 
 enum FinishItemKeys: String, CodingKey {
-  case msg = "msg"
+  case msg = "message"
 }
 
 
@@ -20,5 +20,4 @@ struct FinishItem: Decodable {
     let container = try decoder.container(keyedBy: FinishItemKeys.self)
     message = try container.decode(String.self, forKey: .msg)
   }
-
 }
